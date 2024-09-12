@@ -1,7 +1,4 @@
-
-
 #include <fmt/core.h>
-#include <fmt/ranges.h>
 
 #include <CLI/CLI.hpp>
 
@@ -20,9 +17,6 @@ int main(int argc, const char** argv)
 	MakeIncrementDiff makediff{ app.add_subcommand("make", "make diff from hash") };
 
 	app.require_subcommand(1);
-
-	// std::string output;
-	// app.add_option("-o,--output", output, "description");
 
 	CLI11_PARSE(app, argc, argv);
 

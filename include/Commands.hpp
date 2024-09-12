@@ -141,9 +141,8 @@ struct BashScript : public ScriptFactory
 {
 	virtual std::string generate(const std::vector<std::string>& deleted_files) const override
 	{
-		std::string script;
+		std::string script{"#!/bin/bash\ndir=\"$1\"\n"};
 		
-		script += fmt::format("#!/bin/bash\ndir=\"$1\"\n");
 		for (auto& i : deleted_files)
 			script += fmt::format("rm \"$dir/{0}\" && echo Deleted: \"$dir/{0}\"\n", i);
 
@@ -155,8 +154,18 @@ struct BatScript : public ScriptFactory
 {
 	virtual std::string generate(const std::vector<std::string>& deleted_files) const override
 	{
-		throw std::runtime_error{fmt::format("bat is not implemented yet")};
-		return "";
+		std::string script{"@echo off\nset dir=%1\n"};
+
+		for (auto i : deleted_files)
+		{
+			std::transform(i.begin(), i.end(), i.begin(), [](char c) {
+				if (c == '/')
+					return '\\';
+				return c;
+			});
+			script += fmt::format("del %dir%\\{0} && echo Deleted: %dir%\\{0}\n", i);
+		}
+		return script;
 	}
 	virtual constexpr std::string extension() const override { return "bat"; }
 };
@@ -164,8 +173,11 @@ struct PshScript : public ScriptFactory
 {
 	virtual std::string generate(const std::vector<std::string>& deleted_files) const override
 	{
-		throw std::runtime_error{fmt::format("powershell is not implemented yet")};
-		return "";
+		std::string script{"Param( [string]$dir )\n"};
+
+		for (auto& i : deleted_files)
+			script += fmt::format("Remove-Item \"$dir/{0}\" && echo Deleted: \"$dir/{0}\"\n", i);
+		return script;
 	}
 	virtual constexpr std::string extension() const override { return "ps1"; }
 };

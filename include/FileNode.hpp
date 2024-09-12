@@ -5,10 +5,9 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/channels.h>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
-
 #include <filesystem>
+
+#include "Format.hpp"
 
 class FileNode
 {
@@ -33,14 +32,7 @@ public:
 	
 
 	static constexpr char Marks[] = "=*-";
-	std::string toString() const
-	{
-		return fmt::format("{:02X} {} {}"
-			, fmt::join(hash, "")
-			, Marks[flag]
-			, path.string()
-		);
-	}
+	std::string toString() const;
 	const HashDigest& getHash() const { return hash; }
 
 	bool compareHash(const  HashDigest& hash) const { return this->hash == hash; }
@@ -82,3 +74,43 @@ public:
 		return path < other.path;
 	}
 };
+
+template <typename Char>
+struct FMT_NS::formatter<FileNode::HashDigest, Char>
+{
+private:
+	using value_type = FileNode::HashDigest::value_type;
+	FMT_NS::formatter<std::remove_cvref_t<value_type>, Char> value_formatter_;
+
+public:
+	template <typename ParseContext>
+	constexpr auto parse(ParseContext &ctx) -> const Char *
+	{
+		return value_formatter_.parse(ctx);
+	}
+
+	template <typename FormatContext>
+	auto format(const FileNode::HashDigest& value, FormatContext &ctx) const
+		-> decltype(ctx.out())
+	{
+		auto it  = value.begin();
+		auto end = value.end();
+		auto out = ctx.out();
+		while (it != end)
+		{
+			out = value_formatter_.format(*it, ctx);
+			++it;
+			ctx.advance_to(out);
+		}
+		return out;
+	}
+};
+
+inline std::string FileNode::toString() const
+{
+	return util::format("{:02X} {} {}"
+		, hash
+		, Marks[flag]
+		, path.string()
+	);
+}

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <CLI/CLI.hpp>
-#include <fmt/format.h>
 
+#include "Format.hpp"
 #include "FileNode.hpp"
 
 struct CliSubcommand
@@ -82,7 +82,7 @@ struct HashCommand : public CliSubcommand
 		std::fstream fs{ output, std::ios::out | std::ios::trunc };
 		for (auto& [key, file] : files)
 		{
-			fs << fmt::format("{}\n", file.toString());
+			fs << util::format("{}\n", file.toString());
 		}
 	}
 };
@@ -102,7 +102,7 @@ struct EmptyDirectoryOrNonexistingPathValidator : public CLI::Validator
 			if (stdfs::is_directory(path) && stdfs::is_empty(path))
 				return std::string{};
 			
-			return fmt::format("{} exists and is not empty.", filename);
+			return util::format("{} exists and is not empty.", filename);
 		};
 	}
 };
@@ -115,12 +115,12 @@ struct ScriptTypeValidator : public CLI::Validator
 
 
 	ScriptTypeValidator()
-		: CLI::Validator{ fmt::format("CHOICE({},{},{})", BASH, BAT, PSH) }
+		: CLI::Validator{ util::format("CHOICE({},{},{})", BASH, BAT, PSH) }
 	{
-		func_ = [](std::string& type) {
+		func_ = [](std::string& type) -> std::string {
 			if (type == BASH || type == BAT || type == PSH)
 				return std::string{};
-			return fmt::format("unkown script type, expecting {:?}, {:?} or {:?}, but {:?} provided."
+			return util::format("unkown script type, expecting \"{}\", \"{}\" or \"{}\", but \"{}\" provided."
 				, BASH, BAT, PSH, type);
 		};
 	}
@@ -144,7 +144,7 @@ struct BashScript : public ScriptFactory
 		std::string script{"#!/bin/bash\ndir=\"$1\"\n"};
 		
 		for (auto& i : deleted_files)
-			script += fmt::format("rm \"$dir/{0}\" && echo Deleted: \"$dir/{0}\"\n", i);
+			script += util::format("rm \"$dir/{0}\" && echo Deleted: \"$dir/{0}\"\n", i);
 
 		return script;
 	}
@@ -163,7 +163,7 @@ struct BatScript : public ScriptFactory
 					return '\\';
 				return c;
 			});
-			script += fmt::format("del %dir%\\{0} && echo Deleted: %dir%\\{0}\n", i);
+			script += util::format("del %dir%\\{0} && echo Deleted: %dir%\\{0}\n", i);
 		}
 		return script;
 	}
@@ -176,7 +176,7 @@ struct PshScript : public ScriptFactory
 		std::string script{"Param( [string]$dir )\n"};
 
 		for (auto& i : deleted_files)
-			script += fmt::format("Remove-Item \"$dir/{0}\" && echo Deleted: \"$dir/{0}\"\n", i);
+			script += util::format("Remove-Item \"$dir/{0}\" && echo Deleted: \"$dir/{0}\"\n", i);
 		return script;
 	}
 	virtual constexpr std::string extension() const override { return "ps1"; }
@@ -271,7 +271,7 @@ struct MakeIncrementDiff : public CliSubcommand
 
 		auto script_maker = ScriptMaker.at(script_type);
 		std::fstream script{
-			get_parent(directory) / fmt::format("{}.{}", script_name, script_maker->extension()),
+			get_parent(directory) / util::format("{}.{}", script_name, script_maker->extension()),
 			std::ios::out | std::ios::trunc
 		};
 		script << script_maker->generate(deleted_files);

@@ -249,7 +249,7 @@ struct MakeIncrementDiff : public CliSubcommand
 				stdfs::path file{ dir / path };
 				stdfs::path target{ output_path / path };
 				if (stdfs::path target_parent = target.parent_path(); !stdfs::exists(target_parent))
-					stdfs::create_directory(target_parent);
+					stdfs::create_directories(target_parent);
 				stdfs::copy_file(file, target);
 
 				continue;

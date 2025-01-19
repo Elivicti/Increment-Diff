@@ -11,8 +11,20 @@ int main(int argc, const char** argv)
 
 	app.require_subcommand(1);
 
-	CLI11_PARSE(app, argc, argv);
-
+	try
+	{
+		app.parse(argc, argv);
+	}
+	catch(const CLI::ParseError& e)
+	{
+		return app.exit(e);
+	}
+	catch(const std::runtime_error& e)
+	{
+		util::print(std::cerr, "{}\n", e.what());
+		util::print(std::cerr, "Run with --help for more information.\n");
+		return 1;
+	}
 	return 0;
 }
 

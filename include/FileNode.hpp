@@ -120,10 +120,29 @@ public:
 	}
 
 	void set_status(StatusFlag flag) const { this->flag = flag; }
+	void set_status(char mark) const
+	{
+		switch (mark)
+		{
+		case Marks[NotChanged]:
+			this->flag = NotChanged;
+			break;
+		case Marks[Modified]:
+			this->flag = Modified;
+			break;
+		case Marks[Deleted]:
+			this->flag = Deleted;
+			break;
+		default:
+			throw std::invalid_argument{ "Invalid mark." };
+		}
+	}
 	StatusFlag status_flag() const { return flag; }
 	char status_mark() const { return Marks[flag]; }
 
 	std::string to_string() const;
+
+	const std::filesystem::path& file_path() const { return path; }
 private:
 	std::filesystem::path path;
 	mutable Sha1Hash hash;

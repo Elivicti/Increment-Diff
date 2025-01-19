@@ -108,10 +108,10 @@ struct HashCommand : public CliSubcommand
 	}
 };
 
-struct EmptyDirectoryOrNonexistingPathValidator : public CLI::Validator
+struct DirectoryOrNonexistingPathValidator : public CLI::Validator
 {
-	EmptyDirectoryOrNonexistingPathValidator()
-		: CLI::Validator{"DIR(empty)|PATH(non-existing)"}
+	DirectoryOrNonexistingPathValidator()
+		: CLI::Validator{"DIR|PATH(non-existing)"}
 	{
 		namespace stdfs = std::filesystem;
 		func_ = [](std::string& filename) {
@@ -120,10 +120,10 @@ struct EmptyDirectoryOrNonexistingPathValidator : public CLI::Validator
 			if (!stdfs::exists(path))
 				return std::string{};
 
-			if (stdfs::is_directory(path) && stdfs::is_empty(path))
+			if (stdfs::is_directory(path))
 				return std::string{};
 			
-			return util::format("{} exists and is not empty.", filename);
+			return util::format("{} exists and is not a directory.", filename);
 		};
 	}
 };
@@ -208,9 +208,12 @@ struct MakeIncrementDiff : public CliSubcommand
 {
 	std::string output;
 	std::string hashfile;
+	std::string compare_hash;
 	std::string directory;
 	std::string script_name;
 	std::string script_type;
+	bool force;
+	bool quiet;
 
 	inline static const std::map<std::string, ScriptFactory::shared_ptr> ScriptMaker {
 		{ ScriptTypeValidator::BASH, ScriptFactory::make<BashScript>() },
@@ -222,16 +225,20 @@ struct MakeIncrementDiff : public CliSubcommand
 		: CliSubcommand{ app_ }
 	{
 		app->add_option("-o,--output", output, "output directory")
-			->check(EmptyDirectoryOrNonexistingPathValidator{})
+			->check(DirectoryOrNonexistingPathValidator{})
 			->required(true);
 
 		app->add_option("directory", directory, "path")
 			->check(CLI::ExistingDirectory)
 			->required(true);
 		
-		app->add_option("-H,--hash", hashfile, "diff file containing hash")
-			->check(CLI::ExistingFile)
-			->required(true);
+		auto group = app->add_option_group("Compare Type", "");
+
+		group->add_option("-H,--hash", hashfile, "read from file for hash diff messages")
+			->check(CLI::ExistingFile);
+		group->add_option("-c,--compare", compare_hash, "compute directory's hash and compare with this file")
+			->check(CLI::ExistingFile);
+		group->require_option(1);
 
 		app->add_option("-s,--script", script_name, "specify generated shell script name, with no suffix")
 			->default_val("clean");
@@ -244,40 +251,82 @@ struct MakeIncrementDiff : public CliSubcommand
 				ScriptTypeValidator::BASH
 			#endif
 			);
+		app->add_flag("-f,--force", force, "if output directory is not empty, force to overwrite it")
+			->default_val(false);
+		app->add_flag("-q,--quiet", quiet, "suppress output")
+			->default_val(false);
 	}
 
 	virtual void operator()() override
 	{
 		namespace stdfs = std::filesystem;
+		stdfs::path input_dir{ directory };
+		stdfs::path output_dir{ output };
 
-		std::fstream fs{ hashfile, std::ios::in };
-		stdfs::path dir{ directory };
-		stdfs::path output_path{ output };
-
-		stdfs::create_directories(output_path);
-
+		std::vector<stdfs::path> modified_files;
 		std::vector<std::string> deleted_files;
 
-		std::string hash, path;
-		char status;
-		while (fs >> hash >> status >> path)
+		if (!compare_hash.empty())
 		{
-			if (status == FileNode::Marks[FileNode::NotChanged])
-				continue;
-			
-			if (status == FileNode::Marks[FileNode::Modified])
+			auto files = HashCommand::compute_directory_hash(input_dir);
+			HashCommand::compare_with_existing_hash(files, compare_hash);
+			for (auto& file : files)
 			{
-				stdfs::path file{ dir / path };
-				stdfs::path target{ output_path / path };
-				if (stdfs::path target_parent = target.parent_path(); !stdfs::exists(target_parent))
-					stdfs::create_directories(target_parent);
-				stdfs::copy_file(file, target);
+				auto status = file.status_flag();
+				if (status == FileNode::NotChanged)
+					continue;
 
-				continue;
+				if (status == FileNode::Deleted)
+				{
+					deleted_files.emplace_back(file.file_path());
+					continue;
+				}
+				modified_files.emplace_back(file.file_path());
 			}
+		}
+		if (!hashfile.empty())
+		{
+			std::fstream fs{ hashfile, std::ios::in };
+			std::string hash, path;
+			char status;
+			while (fs >> hash >> status)
+			{
+				fs.ignore(1); // ignore space
+				std::getline(fs, path); // path may contain spaces
+				if (status == FileNode::Marks[FileNode::NotChanged])
+					continue;
+				
+				if (status == FileNode::Marks[FileNode::Modified])
+				{
+					modified_files.emplace_back(stdfs::path{ path });
+					continue;
+				}
 
-			// status == FileNode::Marks[FileNode::Deleted]
-			deleted_files.emplace_back(path);
+				// status == FileNode::Marks[FileNode::Deleted]
+				deleted_files.emplace_back(path);
+			}
+		}
+
+		if (stdfs::exists(output_dir) && !stdfs::is_empty(output_dir))
+		{
+			if (!force)
+				throw std::runtime_error{ "Output directory is not empty, use -f to force overwrite." };
+
+			if (!quiet)
+				util::print("Output directory is not empty, force to overwrite it.\n");
+			stdfs::remove_all(output_dir);
+		}
+		
+		stdfs::create_directories(output_dir);
+		for (auto& file : modified_files)
+		{
+			stdfs::path target_dest{ output_dir / file };
+			stdfs::path file_path  { input_dir  / file };
+			if (!quiet)
+				util::print("Copying: {} -> {}\n", file_path.string(), target_dest.string());
+			if (stdfs::path target_parent = target_dest.parent_path(); !stdfs::exists(target_parent))
+				stdfs::create_directories(target_parent);
+			stdfs::copy_file(file_path, target_dest);
 		}
 
 		if (deleted_files.empty())
@@ -289,10 +338,18 @@ struct MakeIncrementDiff : public CliSubcommand
 				parent = parent.parent_path();
 			return parent.empty() ? stdfs::current_path() : parent;
 		};
-
 		auto script_maker = ScriptMaker.at(script_type);
+		stdfs::path script_path{ get_parent(directory) / util::format("{}.{}", script_name, script_maker->extension()) };
+
+		if (!quiet)
+		{
+			util::print("Generating {} for following files:\n", script_path.string());
+			for (auto& i : deleted_files)
+				util::print("  {}\n", i);
+		}
+
 		std::fstream script{
-			get_parent(directory) / util::format("{}.{}", script_name, script_maker->extension()),
+			script_path,
 			std::ios::out | std::ios::trunc
 		};
 		script << script_maker->generate(deleted_files);

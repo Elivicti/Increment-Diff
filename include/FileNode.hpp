@@ -9,10 +9,81 @@
 
 #include "Format.hpp"
 
+struct Sha1Hash : std::array<CryptoPP::byte, 20>
+{
+	constexpr Sha1Hash() = default;
+	constexpr Sha1Hash(const Sha1Hash& hash)
+	{
+		std::copy(hash.begin(), hash.end(), this->begin());
+	}
+	Sha1Hash(const std::string& str)
+	{
+		from_string(str);
+	}
+	Sha1Hash(const std::filesystem::path& path)
+	{
+		compute(path);
+	}
+	
+	Sha1Hash& compute(const std::filesystem::path& path)
+	{
+		CryptoPP::SHA1 sha1;
+
+		CryptoPP::HashFilter filter(sha1, new CryptoPP::ArraySink(this->data(), this->size()));
+
+		CryptoPP::ChannelSwitch cs;
+		cs.AddDefaultRoute(filter);
+
+		CryptoPP::FileSource(path.string().data(), true, new CryptoPP::Redirector(cs));
+
+		return *this;
+	}
+
+	Sha1Hash& from_string(const std::string& str)
+	{
+		CryptoPP::StringSource{str, true, new CryptoPP::HexDecoder{
+			new CryptoPP::ArraySink{ this->data(), this->size() }
+		}};
+		return *this;
+	}
+
+	std::string to_string() const;
+
+	constexpr bool valid() const
+	{
+		return !std::all_of(this->begin(), this->end(), [](const value_type& byte) { return byte == 0; });
+	}
+	constexpr void invalidate()
+	{
+		std::fill(this->begin(), this->end(), 0);
+	}
+
+public:
+	bool operator==(const Sha1Hash& other) const
+	{
+		return std::equal(this->begin(), this->end(), other.begin());
+	}
+	bool operator<(const Sha1Hash& other) const
+	{
+		return std::lexicographical_compare(this->begin(), this->end(), other.begin(), other.end());
+	}
+	bool operator>(const Sha1Hash& other) const
+	{
+		return other < *this;
+	}
+	bool operator<=(const Sha1Hash& other) const
+	{
+		return !(*this > other);
+	}
+	bool operator>=(const Sha1Hash& other) const
+	{
+		return !(*this < other);
+	}
+};
+
 class FileNode
 {
 public:
-	using HashDigest = std::array<CryptoPP::byte, 20>;
 	enum StatusFlag
 	{
 		NotChanged, // default
@@ -21,52 +92,42 @@ public:
 	};
 
 public:
-	FileNode(const HashDigest& hash_, const std::filesystem::path& path_, StatusFlag flag_ = NotChanged)
-		: path{ path_ }, hash{ hash_ }, flag{ flag_ } {}
+	FileNode(const std::filesystem::path& path_, StatusFlag flag_ = NotChanged)
+		: path{ path_ }, hash{}, flag{ flag_ } {}
 
-	FileNode(const std::string& hash_, const std::string& path_, StatusFlag flag_ = NotChanged)
-		: path{ path_ }
-		, hash{ ConvertHexString(hash_) }
-		, flag{ flag_ }
-	{}
-	
+	FileNode(const std::string& path_, StatusFlag flag_ = NotChanged)
+		: path{ path_ }, hash{}, flag{ flag_ } {}
 
 	static constexpr char Marks[] = "=*-";
-	std::string toString() const;
-	const HashDigest& getHash() const { return hash; }
-
-	bool compareHash(const  HashDigest& hash) const { return this->hash == hash; }
-	bool compareHash(const std::string& hash) const
+	const Sha1Hash& file_hash() const
 	{
-		return compareHash(ConvertHexString(hash));
+		return hash;
+	}
+	void compute_hash() const
+	{
+		hash.compute(path);
+	}
+	void compute_hash(const std::filesystem::path& parent) const
+	{
+		hash.compute(parent / path);
+	}
+	void set_hash(const Sha1Hash& hash) const { this->hash = hash; }
+
+	bool compare_hash(const Sha1Hash& hash) const { return this->hash == hash; }
+	bool compare_hash(const std::string& hash) const
+	{
+		return compare_hash(Sha1Hash{ hash });
 	}
 
-	static HashDigest ConvertHexString(const std::string& str)
-	{
-		HashDigest array;
-		CryptoPP::StringSource{str, true, new CryptoPP::HexDecoder{
-			new CryptoPP::ArraySink{ array.data(), array.size() }
-		}};
-		return array;
-	}
-	static HashDigest GetFileSha1(const std::filesystem::path& path)
-	{
-		HashDigest digest;
-		CryptoPP::SHA1 sha1;
+	void set_status(StatusFlag flag) const { this->flag = flag; }
+	StatusFlag status_flag() const { return flag; }
+	char status_mark() const { return Marks[flag]; }
 
-		CryptoPP::HashFilter filter(sha1, new CryptoPP::ArraySink(digest.data(), digest.size()));
-
-		CryptoPP::ChannelSwitch cs;
-		cs.AddDefaultRoute(filter);
-
-		CryptoPP::FileSource(path.string().data(), true, new CryptoPP::Redirector(cs));
-		return digest;
-	}
-	
-	mutable StatusFlag flag;
+	std::string to_string() const;
 private:
 	std::filesystem::path path;
-	HashDigest hash;
+	mutable Sha1Hash hash;
+	mutable StatusFlag flag;
 
 public:
 	bool operator<(const FileNode& other) const
@@ -76,10 +137,10 @@ public:
 };
 
 template <typename Char>
-struct FMT_NS::formatter<FileNode::HashDigest, Char>
+struct FMT_NS::formatter<Sha1Hash, Char>
 {
 private:
-	using value_type = FileNode::HashDigest::value_type;
+	using value_type = Sha1Hash::value_type;
 	FMT_NS::formatter<std::remove_cvref_t<value_type>, Char> value_formatter_;
 
 public:
@@ -90,7 +151,7 @@ public:
 	}
 
 	template <typename FormatContext>
-	auto format(const FileNode::HashDigest& value, FormatContext &ctx) const
+	auto format(const Sha1Hash& value, FormatContext &ctx) const
 		-> decltype(ctx.out())
 	{
 		auto it  = value.begin();
@@ -106,7 +167,13 @@ public:
 	}
 };
 
-inline std::string FileNode::toString() const
+
+inline std::string Sha1Hash::to_string() const
+{
+	return util::format("{:02X}", *this);
+}
+
+inline std::string FileNode::to_string() const
 {
 	return util::format("{:02X} {} {}"
 		, hash

@@ -27,7 +27,7 @@ struct HashCommand : public CliSubcommand
 {
 	std::string output;
 	std::string directory;
-	std::string lasthash;
+	std::string compare_hash;
 
 	HashCommand(CLI::App* app_)
 		: CliSubcommand{ app_ }
@@ -38,7 +38,7 @@ struct HashCommand : public CliSubcommand
 			->check(CLI::ExistingDirectory)
 			->required(true);
 		
-		app->add_option("-l,--last-hash", lasthash, "previous hash to compare")
+		app->add_option("-c,--compare", compare_hash, "previous hash to compare")
 			->check(CLI::ExistingFile);
 	}
 
@@ -49,32 +49,36 @@ struct HashCommand : public CliSubcommand
 		std::map<stdfs::path, FileNode> files;
 		stdfs::path dir{ directory };
 
-		for (auto& entry : stdfs::recursive_directory_iterator{ directory })
+		for (auto& entry : stdfs::recursive_directory_iterator{ dir })
 		{
 			if (entry.is_directory())
 				continue;
-			stdfs::path path_key{ stdfs::relative(entry.path(), directory) };
-			auto [it, success] = files.try_emplace(
-				path_key, FileNode::GetFileSha1(entry.path()), path_key, FileNode::Modified);
+			stdfs::path relative_path{ stdfs::relative(entry.path(), dir) };
+			auto [it, success] = files.try_emplace(relative_path, relative_path, FileNode::Modified);
+			auto& file = it->second;
+			file.compute_hash(dir);
 		}
 
-		if (!lasthash.empty())
+		if (!compare_hash.empty())
 		{
 			using iterator = decltype(files)::iterator;
-			std::fstream last{ lasthash, std::ios::in };
+			std::fstream hashfs{ compare_hash, std::ios::in };
 			std::string hash, status, path;
-			while (last >> hash >> status >> path)
+			while (hashfs >> hash >> status)
 			{
-				if (iterator it = files.find(path); it != files.end() && it->second.compareHash(hash))
+				hashfs.ignore(1); // ignore space
+				std::getline(hashfs, path); // path may contain spaces
+
+				iterator it = files.find(path);
+				if (it == files.end())
 				{
-					it->second.flag = FileNode::NotChanged;
+					auto& file = files.try_emplace(path, path, FileNode::Deleted).first->second;
+					file.set_hash(hash);
+					continue;
 				}
-				else if (it == files.end())
-				{
-					files.try_emplace(path, hash, path, FileNode::Deleted);
-				}
-				// else
-				//  file is modified, nothing needs to be done
+				auto& [path, file] = *it;
+				if (file.compare_hash(hash))
+					file.set_status(FileNode::NotChanged);
 			}
 		}
 
@@ -82,7 +86,7 @@ struct HashCommand : public CliSubcommand
 		{
 			for (auto& [key, file] : files)
 			{
-				std::cout << util::format("{}\n", file.toString());
+				util::print("{}\n", file.to_string());
 			}
 			return;
 		}
@@ -90,7 +94,7 @@ struct HashCommand : public CliSubcommand
 		std::fstream fs{ output, std::ios::out | std::ios::trunc };
 		for (auto& [key, file] : files)
 		{
-			fs << util::format("{}\n", file.toString());
+			util::print(fs, "{}\n", file.to_string());
 		}
 	}
 };

@@ -84,7 +84,7 @@ private:
 
 public:
 	template <typename ParseContext>
-	constexpr auto parse(ParseContext &ctx) -> const Char *
+	constexpr auto parse(ParseContext &ctx)
 	{
 		return value_formatter_.parse(ctx);
 	}

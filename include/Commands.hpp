@@ -32,10 +32,9 @@ struct HashCommand : public CliSubcommand
 	HashCommand(CLI::App* app_)
 		: CliSubcommand{ app_ }
 	{
-		app->add_option("-o,--output", output, "description")
-			->required(true);
+		app->add_option("-o,--output", output, "output file, if not specified, output to stdout");
 
-		app->add_option("directory", directory, "path")
+		app->add_option("directory", directory, "path to directory that needs to compute hash")
 			->check(CLI::ExistingDirectory)
 			->required(true);
 		
@@ -77,6 +76,15 @@ struct HashCommand : public CliSubcommand
 				// else
 				//  file is modified, nothing needs to be done
 			}
+		}
+
+		if (output.empty())
+		{
+			for (auto& [key, file] : files)
+			{
+				std::cout << util::format("{}\n", file.toString());
+			}
+			return;
 		}
 
 		std::fstream fs{ output, std::ios::out | std::ios::trunc };

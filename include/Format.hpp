@@ -2,7 +2,7 @@
 
 #if defined(FMT_LIB)
 
-#include <fmt/format.h>
+#include <fmt/ostream.h>
 namespace util
 {
 	using fmt::format;
@@ -11,9 +11,21 @@ namespace util
 #else
 
 #include <format>
+#include <iostream>
 namespace util
 {
 	using std::format;
+
+	template <typename... Args>
+	void print(std::ostream& os, std::format_string<Args...> fmt, Args&&... args)
+	{
+		std::format_to(std::ostreambuf_iterator{ os }, fmt, std::forward<Args>(args)...);
+	}
+	template <typename... Args>
+	void print(std::format_string<Args...> fmt, Args&&... args)
+	{
+		print(std::cout, fmt, std::forward<Args>(args)...);
+	}
 }
 #define FMT_NS std
 #endif

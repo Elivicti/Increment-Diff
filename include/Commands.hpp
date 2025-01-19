@@ -42,49 +42,58 @@ struct HashCommand : public CliSubcommand
 			->check(CLI::ExistingFile);
 	}
 
+	static std::set<FileNode> compute_directory_hash(const std::filesystem::path& dir)
+	{
+		std::set<FileNode> files;
+		for (auto& entry : std::filesystem::recursive_directory_iterator{ dir })
+		{
+			if (entry.is_directory())
+				continue;
+			std::filesystem::path relative_path{ std::filesystem::relative(entry.path(), dir) };
+			auto [it, success] = files.emplace(relative_path, FileNode::Modified);
+			it->compute_hash(dir);
+		}
+		return files;
+	}
+
+	static std::set<FileNode>& compare_with_existing_hash(std::set<FileNode>& files, const std::string& hashfile)
+	{
+		using iterator = std::remove_cvref_t<decltype(files)>::iterator;
+		std::fstream hashfs{ hashfile, std::ios::in };
+		std::string hash, status, path;
+		while (hashfs >> hash >> status)
+		{
+			hashfs.ignore(1); // ignore space
+			std::getline(hashfs, path); // path may contain spaces
+
+			iterator it = files.find(path);
+			if (it == files.end())
+			{
+				auto [fileit, success] = files.emplace(path, FileNode::Deleted);
+				fileit->set_hash(hash);
+				continue;
+			}
+			if (it->compare_hash(hash))
+				it->set_status(FileNode::NotChanged);
+		}
+		return files;
+	}
+
 	virtual void operator()() override
 	{
 		namespace stdfs = std::filesystem;
 
-		std::map<stdfs::path, FileNode> files;
 		stdfs::path dir{ directory };
-
-		for (auto& entry : stdfs::recursive_directory_iterator{ dir })
-		{
-			if (entry.is_directory())
-				continue;
-			stdfs::path relative_path{ stdfs::relative(entry.path(), dir) };
-			auto [it, success] = files.try_emplace(relative_path, relative_path, FileNode::Modified);
-			auto& file = it->second;
-			file.compute_hash(dir);
-		}
+		std::set<FileNode> files = compute_directory_hash(dir);
 
 		if (!compare_hash.empty())
 		{
-			using iterator = decltype(files)::iterator;
-			std::fstream hashfs{ compare_hash, std::ios::in };
-			std::string hash, status, path;
-			while (hashfs >> hash >> status)
-			{
-				hashfs.ignore(1); // ignore space
-				std::getline(hashfs, path); // path may contain spaces
-
-				iterator it = files.find(path);
-				if (it == files.end())
-				{
-					auto& file = files.try_emplace(path, path, FileNode::Deleted).first->second;
-					file.set_hash(hash);
-					continue;
-				}
-				auto& [path, file] = *it;
-				if (file.compare_hash(hash))
-					file.set_status(FileNode::NotChanged);
-			}
+			compare_with_existing_hash(files, compare_hash);
 		}
 
 		if (output.empty())
 		{
-			for (auto& [key, file] : files)
+			for (auto& file : files)
 			{
 				util::print("{}\n", file.to_string());
 			}
@@ -92,7 +101,7 @@ struct HashCommand : public CliSubcommand
 		}
 
 		std::fstream fs{ output, std::ios::out | std::ios::trunc };
-		for (auto& [key, file] : files)
+		for (auto& file : files)
 		{
 			util::print(fs, "{}\n", file.to_string());
 		}

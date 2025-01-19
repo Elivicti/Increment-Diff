@@ -6,6 +6,7 @@
 namespace util
 {
 	using fmt::format;
+	using fmt::print;
 }
 #define FMT_NS fmt
 #else

@@ -3,6 +3,8 @@ cmake_minimum_required (VERSION 3.11)
 
 include(FetchContent)
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 FetchContent_Declare(
     cryptopp-cmake
     GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git

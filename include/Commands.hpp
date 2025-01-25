@@ -278,7 +278,7 @@ struct MakeIncrementDiff : public CliSubcommand
 
 				if (status == FileNode::Deleted)
 				{
-					deleted_files.emplace_back(file.file_path());
+					deleted_files.emplace_back(file.file_path().generic_string());
 					continue;
 				}
 				modified_files.emplace_back(file.file_path());

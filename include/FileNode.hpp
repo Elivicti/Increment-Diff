@@ -7,7 +7,7 @@
 
 #include <filesystem>
 
-#include "Format.hpp"
+#include "util.hpp"
 
 struct Sha1Hash : std::array<CryptoPP::byte, 20>
 {

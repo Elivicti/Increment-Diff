@@ -1,30 +1,37 @@
-# CMake 最低版本号要求
-cmake_minimum_required (VERSION 3.11)
+cmake_minimum_required (VERSION 3.21)
 
 include(FetchContent)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 FetchContent_Declare(
-    cryptopp-cmake
-    GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
-    GIT_TAG CRYPTOPP_8_9_0
+	picosha2
+	GIT_REPOSITORY git@github.com:okdshin/PicoSHA2
+	GIT_TAG        v1.0.1
 )
-FetchContent_MakeAvailable(cryptopp-cmake)
+FetchContent_MakeAvailable(picosha2)
 
 FetchContent_Declare(
     CLI11
-    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_REPOSITORY git@github.com:CLIUtils/CLI11.git
     GIT_TAG v2.4.2
 )
 FetchContent_MakeAvailable(CLI11)
 
 include_directories(${CLI11_SOURCE_DIR}/include)
 
-# 项目信息
 project(IncrementDiff)
 
-set(CMAKE_CXX_STANDARD 20 REQUIRED)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(include)
 add_subdirectory(src)
+
+
+if (PROJECT_IS_TOP_LEVEL)
+	# copy compile_commands.json to build
+	execute_process(
+		COMMAND ${CMAKE_COMMAND} -E copy
+			${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+			${CMAKE_EXPORT_COMPILE_COMMANDS_DIR}/compile_commands.json
+	)
+endif()

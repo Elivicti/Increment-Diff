@@ -25,10 +25,17 @@ namespace util
 	template <typename... Args>
 	void print(std::format_string<Args...> fmt, Args&&... args)
 	{
-		print(std::cout, fmt, std::forward<Args>(args)...);
+		::util::print(std::cout, fmt, std::forward<Args>(args)...);
 	}
 }
 #define FMT_NS std
 #endif
 
-
+namespace util
+{
+	template<typename ExcepT, typename ...Args>
+	ExcepT make_exception(FMT_NS::format_string<Args...> fmt, Args&&... args)
+	{
+		return ExcepT{ ::util::format(fmt, std::forward<Args>(args)...) };
+	}
+}

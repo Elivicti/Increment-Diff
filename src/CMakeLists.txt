@@ -1,8 +1,6 @@
-# CMake 最低版本号要求
-cmake_minimum_required (VERSION 3.11)
+cmake_minimum_required (VERSION 3.21)
 
 if (USE_FMT)
-	# 指定这个变量的时候才尝试寻找fmt
 	find_package(fmt)
 endif()
 
@@ -10,6 +8,7 @@ endif()
 add_executable(
 	IncrementDiff
 		main.cpp
+		Commands.cpp
 )
 
 if (fmt_FOUND)
@@ -30,5 +29,5 @@ endif()
 target_link_libraries(
 	IncrementDiff
 		${FMT_LINK_LIB}
-		cryptopp::cryptopp
+		picosha2
 )

@@ -8,6 +8,101 @@
 
 #include <picosha2.h>
 
+namespace alt
+{
+#ifdef __cpp_lib_ranges_chunk
+	using std::views::chunk;
+#else
+	template<std::ranges::view V>
+	class chunk_view : public std::ranges::view_interface<chunk_view<V>>
+	{
+		V base;
+		std::size_t chunk_size;
+
+		class iterator
+		{
+			using BaseIter = std::ranges::iterator_t<V>;
+			BaseIter current;
+			BaseIter end;
+			std::size_t chunk_size;
+
+		public:
+			using iterator_category = std::input_iterator_tag;
+			using value_type = std::ranges::subrange<BaseIter>;
+			using difference_type = std::ranges::range_difference_t<V>;
+
+			iterator() = default;
+
+			iterator(BaseIter begin, BaseIter end, std::size_t chunk_size)
+				: current{ begin }, end{ end }
+				, chunk_size{ chunk_size } {}
+
+			value_type operator*() const
+			{
+				auto next = current;
+				std::advance(next, chunk_size);
+				return { current, next };
+			}
+
+			iterator& operator++()
+			{
+				std::advance(current, chunk_size);
+				return *this;
+			}
+
+			iterator operator++(int)
+			{
+				auto tmp = *this;
+				this->operator++()();
+				return tmp;
+			}
+
+			bool operator==(const iterator& other) const
+			{ return current == other.current; }
+
+			bool operator==(std::default_sentinel_t) const
+			{ return current == end; }
+		};
+
+	public:
+		chunk_view() = default;
+
+		chunk_view(V base, std::size_t chunk_size)
+			: base{ std::move(base) }, chunk_size{ chunk_size }
+		{ assert(chunk_size > 0); }
+
+		auto begin()
+		{ return iterator{ std::ranges::begin(base), std::ranges::end(base), chunk_size }; }
+
+		auto end()
+		{ return std::default_sentinel; }
+
+		auto begin() const requires std::ranges::range<const V>
+		{ return iterator{ std::ranges::begin(base), std::ranges::end(base), chunk_size }; }
+
+		auto end() const requires std::ranges::range<const V>
+		{ return std::default_sentinel; }
+	};
+
+	struct chunk_fn
+	{
+		std::size_t chunk_size;
+
+		template <std::ranges::viewable_range R>
+		auto operator()(R&& r) const
+		{ return chunk_view{ std::views::all(std::forward<R>(r)), chunk_size }; }
+
+	};
+
+	inline chunk_fn chunk(std::size_t chunk_size)
+	{ return { chunk_size }; }
+
+	template <std::ranges::viewable_range R>
+	inline auto operator|(R&& r, const chunk_fn& adapter)
+	{ return adapter(std::forward<R>(r)); }
+#endif
+}
+
 enum class HashAlgorithm : std::uint32_t
 {
 	Sha256,
@@ -23,12 +118,12 @@ struct FMT_NS::formatter<byte_array<N>, CharT>
 	using bytearray = byte_array<N>;
 	using value_type = typename bytearray::value_type;
 
-	FMT_NS::formatter<std::remove_cvref_t<value_type>, CharT> value_formatter_;
+	FMT_NS::formatter<std::remove_cvref_t<value_type>, CharT> value_formatter;
 
 	template <typename ParseContext>
 	constexpr auto parse(ParseContext &ctx)
 	{
-		return value_formatter_.parse(ctx);
+		return value_formatter.parse(ctx);
 	}
 
 	template <typename FormatContext>
@@ -40,7 +135,7 @@ struct FMT_NS::formatter<byte_array<N>, CharT>
 		auto out = ctx.out();
 		while (it != end)
 		{
-			out = value_formatter_.format(*it, ctx);
+			out = value_formatter.format(*it, ctx);
 			++it;
 			ctx.advance_to(out);
 		}
@@ -82,12 +177,14 @@ struct Hash
 		if (size > N * 2) // ensure not overflow
 			hex = hex.substr(0, N * 2);
 
-		auto bytes_view = hex | std::views::chunk(2) | std::views::transform([](auto byte_chars) {
-			uint8_t byte = 0;
-			const char* ptr = &*byte_chars.begin();
-			std::from_chars(ptr, ptr + 2, byte, 16);
-			return byte;
-		});
+		auto bytes_view = hex
+			| alt::chunk(2)
+			| std::views::transform([](auto byte_chars) {
+				uint8_t byte = 0;
+				const char* ptr = &*byte_chars.begin();
+				std::from_chars(ptr, ptr + 2, byte, 16);
+				return byte;
+			});
 		std::ranges::copy(bytes_view, ret.value.begin());
 		return ret;
 	}

@@ -48,9 +48,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target IncrementDiff -j 8
 ```
 
-### Cmake options
+### CMake options
 
-`USE_FMT`: set to `1` to let cmake find `fmtlib` and use it for formatting strings. If `USE_FMT` is not set, or is set to `1` but `fmtlib` is not found, `std::format` is used to format strings.
+`USE_FMT`(`BOOL`): Determines if fmtlib is used to format strings. Default: `OFF`
 
 ## Dependencies
 

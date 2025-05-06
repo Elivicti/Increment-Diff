@@ -54,7 +54,7 @@ cmake --build build --config Release --target IncrementDiff -j 8
 
 ## Dependencies
 
-+ [`CryptoPP`](https://github.com/weidai11/cryptopp) and [`cryptopp-cmake`](https://github.com/abdes/cryptopp-cmake):
++ [`PicoSHA2`](https://github.com/okdshin/PicoSHA2):
 
 	Used to compute file's hash value.
 
@@ -62,6 +62,6 @@ cmake --build build --config Release --target IncrementDiff -j 8
 
 	Used to create command line interface.
 
-+ [`fmtlib`](https://github.com/fmtlib/fmt) (Optional)
++ [`fmtlib`](https://github.com/fmtlib/fmt): (Optional)
 
 	Optional library for formatting strings, see [Cmake options](#Cmake-options) for more details.

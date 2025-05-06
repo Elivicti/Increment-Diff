@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 3.21)
 
 if (USE_FMT)
-	find_package(fmt)
+	find_package(fmt QUIET)
 endif()
 
 # 指定生成目标

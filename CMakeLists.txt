@@ -27,12 +27,3 @@ option(USE_FMT "Determines if fmtlib is used to format strings" OFF)
 include_directories(include)
 add_subdirectory(src)
 
-
-if (PROJECT_IS_TOP_LEVEL)
-	# copy compile_commands.json to build
-	execute_process(
-		COMMAND ${CMAKE_COMMAND} -E copy
-			${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
-			${CMAKE_EXPORT_COMPILE_COMMANDS_DIR}/compile_commands.json
-	)
-endif()

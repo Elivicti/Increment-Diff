@@ -30,4 +30,5 @@ target_link_libraries(
 	IncrementDiff
 		${FMT_LINK_LIB}
 		picosha2
+		CLI11::CLI11
 )

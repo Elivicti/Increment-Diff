@@ -1,5 +1,7 @@
 cmake_minimum_required (VERSION 3.21)
 
+project(IncrementDiff)
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -16,9 +18,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(CLI11)
 
-include_directories(${CLI11_SOURCE_DIR}/include)
-
-project(IncrementDiff)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
